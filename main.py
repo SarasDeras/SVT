@@ -259,7 +259,7 @@ A, b = create_matrix_FEM()  # Вычисление матрицы моменто
 A_quad = create_matrix_FEM_with_quad()  # Вычисление матрицы в моментов в лоб (численным интерированием), с учетом того,
                                         # что supp phi_ij принажлежит [0, 1] x [0, 1]. Матрица на выходе не симметрична.
                                         # (проблема не в численном интегрировании, результаты с ходятся с моим предпос-
-                                        # чётом руками)
+                                        # чётом руками). Надо посмотреть.
 print("Свойства матрицы A: ")
 print(np.count_nonzero(np.linalg.eigvals(A_quad.toarray()) <= 0))
 print(np.linalg.norm(A_quad.toarray().T - A_quad.toarray()))

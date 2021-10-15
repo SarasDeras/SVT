@@ -33,6 +33,12 @@ def get_indexes_by_multi_index(index):
 
 
 def create_matrix_FEM():
+    """
+    Функция создания матрицы метода моментов. Работает без вычисления интегралов (посчитаны руками), матрица
+    симметричная, положительно определённая и совпадает с базовым вариантом через численное интегрирование, но она
+    не обновлена под вычисление интегралов только внутри [0, 1] x [0, 1]
+    :return: A - матрица метода моментов, COO-format
+    """
     row = []
     col = []
     values = []
@@ -98,11 +104,15 @@ def basis_function(i, j, x, y):
 
 
 def div_basis_function(i, j, x, y, tensor=False):
+    """
+    Вычисление (D grad, phi_ij)(x, y). Параметр tensor отвечает за применение тензора диффуции.
+    """
     x_i, y_j = coords_by_inside(i, j)
     x_r = (x - x_i) / h
     y_r = (y - y_j) / h
-    if x > 1 or x < 0 or y < 0 or y > 1:
-        return 0
+    if x > 1 or x < 0 or y < 0 or y > 1:  # Вот эта строка отвечает, за отдельную обработку границы
+        return 0                          # Если её убрать, то с матрицей всё в порядке, но интеграл берётся по
+                                          # по пересечению носителей базовых функций за границе [0, 1] x [0, 1]
     if abs(x_r) > 1 or abs(y_r) > 1:  # Не supp \phi
         return 0
     if x_r >= 0 and y_r >= 0:  # 0
@@ -122,7 +132,13 @@ def div_basis_function(i, j, x, y, tensor=False):
     return 1 / h * (d_dx + d_dy)
 
 
-def create_matrix_FEM_calc():
+def create_matrix_FEM_with_quad():
+    """
+    Базовая версия создания матрицы метода моментов. Работает с помощью численного интегрирования, максимально медленно
+    и не оптимально, но создана только для проверки оптимизированной функции. Учитывает, что supp phi_ij принаждлежит
+    [0, 1] x [0, 1]. Матрица получается не симметричной.
+    :return: A - матрица метода моментов, COO-format
+    """
     row = []
     col = []
     values = []
@@ -141,14 +157,6 @@ def create_matrix_FEM_calc():
                         bounds_x = [max(x_i - h, x_k - h, 0), min(x_i + h, x_k + h, 1)]
                         bounds_y = [max(y_j - h, y_l - h, 0), min(y_j + h, y_l + h, 1)]
                         I_by_quad, error = nquad(diff_operator, [bounds_x, bounds_y])
-                        if get_multi_index(i, j) == 1 and get_multi_index(k, l) == 0:
-                            print(I_by_quad)
-                            print(bounds_x)
-                            print(bounds_y)
-                        if get_multi_index(i, j) == 0 and get_multi_index(k, l) == 1:
-                            print(I_by_quad)
-                            print(bounds_x)
-                            print(bounds_y)
                         row.append(get_multi_index(i, j))
                         col.append(get_multi_index(k, l))
                         values.append(I_by_quad)
@@ -159,27 +167,12 @@ def create_matrix_FEM_calc():
     return sparse.coo_matrix((values, (row, col)), shape=(N ** 2, N ** 2))
 
 
-"""
 def answer(x, y):
-    return np.cos(np.pi * x) * np.cos(np.pi * y)
-"""
-
-
-def answer(x, y):
-    return 1
-
-
-"""
-def f(x, y):
-    if 0 <= x <= 1 and 0 <= y <= 1:
-        return -12 * np.pi ** 2 * answer(x, y)
-    else:
-        return 0
-"""
+    return 1  # np.cos(np.pi * x) * np.cos(np.pi * y)
 
 
 def f(x, y):
-    return 0
+    return 0  # -12 * np.pi ** 2 * answer(x, y)
 
 
 def create_right():
@@ -262,25 +255,28 @@ def calc_c_norm(x):
 
 N = 2
 h = 1 / N
-#A, b = create_matrix_FEM()
-A_quad = create_matrix_FEM_calc()
+A, b = create_matrix_FEM()  # Вычисление матрицы моментов, оптимизированно (не обновлена, смотреть особо смысла нет)
+A_quad = create_matrix_FEM_with_quad()  # Вычисление матрицы в моментов в лоб (численным интерированием), с учетом того,
+                                        # что supp phi_ij принажлежит [0, 1] x [0, 1]. Матрица на выходе не симметрична.
+                                        # (проблема не в численном интегрировании, результаты с ходятся с моим предпос-
+                                        # чётом руками)
 print("Свойства матрицы A: ")
 print(np.count_nonzero(np.linalg.eigvals(A_quad.toarray()) <= 0))
 print(np.linalg.norm(A_quad.toarray().T - A_quad.toarray()))
 print(A_quad.toarray()[0, 1])
 print(A_quad.toarray()[1, 0])
-print("------------------")
-#print(np.linalg.norm(A.toarray() - A_quad.toarray()))
+print("--------------------------------------------------------")
+# print(np.linalg.norm(A.toarray() - A_quad.toarray()))
 # sns.heatmap(np.abs(A.toarray() - A_quad.toarray()), square=True)
 # plt.show()
 # print(A.toarray())
 # print(A_quad.toarray())
 
-
+"""
 b_old = create_right()
-#print(np.linalg.norm(b - b_old))
-#print(np.count_nonzero(b))
-#print(np.count_nonzero(b_old))
+# print(np.linalg.norm(b - b_old))
+# print(np.count_nonzero(b))
+# print(np.count_nonzero(b_old))
 x_real = np.zeros(shape=(N ** 2))
 for i in range(0, N):
     for j in range(0, N):
@@ -288,12 +284,12 @@ for i in range(0, N):
         x_i, y_j = coords_by_inside(i, j)
         x_real[index] = answer(x_i, y_j)
 b_for_real = A_quad @ x_real
-print("Ошибка на правой части:" )
+print("Ошибка на правой части:")
 print(np.linalg.norm(b_old - b_for_real))
-#print(np.linalg.norm(b - b_for_real))
-#print(b_old)
-#print(np.round(b_for_real, 2))
-#print(b_for_real - b_old)
+# print(np.linalg.norm(b - b_for_real))
+# print(b_old)
+# print(np.round(b_for_real, 2))
+# print(b_for_real - b_old)
 
 x, info = sparse.linalg.bicg(A_quad.tocsr(), b_old, tol=1e-6)
 print("Невязка: ")
@@ -312,3 +308,4 @@ for i in range(0, N):
 
 sns.heatmap(error_matrix, cmap="Greys", square=True)
 plt.show()
+"""

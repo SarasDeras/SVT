@@ -68,7 +68,7 @@ def create_MFV_matrix(reg=False):
             if j != 0:
                 append_COO(r_ind, i, j - 1, y_coef)  # C^{n + 1}_ij-1
 
-            b[r_ind] -= (inj_coef - h ** 2) * get_C_ij_prev(i, j)  # C^{n}_ij
+            b[r_ind] -= (ij_coef - 2 * h ** 2 / dt) * get_C_ij_prev(i, j)  # C^{n}_ij
             b[r_ind] -= ipj_coef * get_C_ij_prev(i - 1, j)  # C^{n}_i-1j
             b[r_ind] -= inj_coef * get_C_ij_prev(i + 1, j)  # C^{n}_i+1j
             b[r_ind] -= y_coef * get_C_ij_prev(i, j + 1)  # C^{n}_ij-1
@@ -81,17 +81,17 @@ def create_MFV_matrix(reg=False):
     return sparse.coo_matrix((values, (row, col)), shape=(N ** 2, N ** 2)), b
 
 
-def MFV_with_time():
+def MFV_with_time(reg=False):
     global C
     for tn in range(N_t):
         print(tn)
-        A, b = create_MFV_matrix()
+        A, b = create_MFV_matrix(reg=reg)
         A = A.tocsr()
 
-        # ILU = sparse.linalg.spilu(A_quad, fill_factor=1.7, drop_tol=1e-3)
+        # ILU = sparse.linalg.spilu(A, fill_factor=1.7, drop_tol=1e-3)
         # prec = sparse.linalg.LinearOperator((N * N, N * N), matvec=ILU.solve)
 
-        # x, info = sparse.linalg.bicg(A_quad, b_old, tol=1e-6, M=prec)
+        # C, info = sparse.linalg.bicg(A, b, tol=1e-6, M=prec)
         C = sparse.linalg.spsolve(A, b)
     return C
 
@@ -110,7 +110,7 @@ def plot_sol():
                     sol.append([])
                 sol[-1].append(C[get_ind_by_mind(i, j)])
     sns.heatmap(sol, square=True, cmap="viridis")
-    plt.show()
+    plt.savefig(f"MFV, reg={reg}, N={N}, T={t}, N_t={N_t}, dx={dx}, dy={dy}.png")
 
 
 x_min = 0
@@ -121,16 +121,17 @@ y_max = 100
 N = 200
 h = (x_max - x_min) / N
 
-dx = 1e-4
+dx = 1e-2
 dy = 0.1
 
 t = 50
-N_t = 100
+N_t = 50
 dt = t / N_t
 
 C = np.zeros(N * N, dtype=float)
 c_0 = 1
 a = 10
+reg = False
 
-C_ans = MFV_with_time()
+C_ans = MFV_with_time(reg)
 plot_sol()

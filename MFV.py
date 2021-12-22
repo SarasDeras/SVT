@@ -3,7 +3,8 @@ import scipy as sp
 import scipy.sparse as sparse
 import seaborn as sns
 import matplotlib.pyplot as plt
-from scipy.integrate import nquad
+from scipy.integrate import quad
+from scipy.special import erf
 
 
 def get_ind_by_mind(i, j):
@@ -96,21 +97,49 @@ def MFV_with_time(reg=False):
     return C
 
 
-def plot_sol():
+def plot_sol(C_to_plot, name='MFV'):
     x_d = 80
     y_d = 30
 
     sol = []
     for j in range(N):
         for i in range(N):
-            x = x_min + i * h
-            y = y_min + j * h
+            x = x_min + (i + 1) * h
+            y = y_min + (j + 1) * h
             if abs(y) <= y_d and x < x_d:
                 if i == 0:
                     sol.append([])
-                sol[-1].append(C[get_ind_by_mind(i, j)])
+                sol[-1].append(C_to_plot[get_ind_by_mind(i, j)])
     sns.heatmap(sol, square=True, cmap="viridis")
-    plt.savefig(f"MFV, reg={reg}, N={N}, T={t}, N_t={N_t}, dx={dx}, dy={dy}.png")
+    plt.savefig(f"{name}, reg={reg}, N={N}, T={t}, N_t={N_t}, dx={dx}, dy={dy}.png")
+    # plt.show()
+
+
+def calc_ans_in_point(x, y, M=1000):
+    def under_int(tao):
+        nonlocal x, y
+        return tao ** (-1.5) * (erf((a + y) / np.sqrt(4 * dy * tao)) + erf((a - y) / np.sqrt(4 * dy * tao))) \
+               * np.exp(-((x - tao) ** 2 / (4 * dx * tao)))
+
+    n_j_array = [np.cos((2 * j - 1) * np.pi / 2 / M) for j in range(1, M + 1)]
+    return x * c_0 / np.sqrt(16 * np.pi * dx) * np.pi * t / 2 / M \
+            * np.sum(np.array([np.sqrt(1-np.power(n_j, 2)) * under_int(t * (n_j + 1) / 2)
+                               for n_j in n_j_array]))
+
+
+def calc_ans():
+    x_d = 80
+    y_d = 30
+
+    C_form = np.zeros(N * N, dtype=float)
+    for j in range(N):
+        print(j)
+        for i in range(N):
+            x = x_min + (i + 1) * h
+            y = y_min + (j + 1) * h
+            C_form[get_ind_by_mind(i, j)] = calc_ans_in_point(x, y)
+    return C_form
+
 
 
 x_min = 0
@@ -121,7 +150,7 @@ y_max = 100
 N = 200
 h = (x_max - x_min) / N
 
-dx = 1e-2
+dx = 1
 dy = 0.1
 
 t = 50
@@ -131,7 +160,19 @@ dt = t / N_t
 C = np.zeros(N * N, dtype=float)
 c_0 = 1
 a = 10
-reg = False
+reg = True
 
+"""
 C_ans = MFV_with_time(reg)
-plot_sol()
+np.save('MFV_1', C_ans)
+plot_sol(C_ans)
+"""
+"""
+C_form = calc_ans()
+np.save('ans_1', C_form)
+plot_sol(C_form, name='ANS')
+"""
+C_ans = np.load('ans_1.npy')
+C_mfv = np.load('MFV_1.npy')
+plot_sol(np.abs(C_mfv - C_ans), name='DIFF')
+print(np.max(np.abs(C_mfv - C_ans)))
